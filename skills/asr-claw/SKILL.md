@@ -1,19 +1,12 @@
 ---
 name: asr-claw
-version: 0.1.0
+version: 1.0.0
 description: Speech recognition CLI for AI agent automation. Transcribe audio from stdin, files, or URLs.
 metadata:
   openclaw:
     os: [darwin, linux]
     arch: [arm64, amd64]
-    dependencies:
-      - name: git
-        check: git --version
-      - name: make
-        check: make --version
-      - name: cc
-        check: cc --version
-        note: "Xcode CLT on macOS: xcode-select --install"
+    dependencies: []
     install: |
       bash "${SKILL_ROOT}/scripts/install-qwen-asr.sh"
     settings:

@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-claw-50: #f0f9ff;
+  --color-claw-100: #e0f2fe;
+  --color-claw-200: #bae6fd;
+  --color-claw-300: #7dd3fc;
+  --color-claw-400: #38bdf8;
+  --color-claw-500: #0ea5e9;
+  --color-claw-600: #0284c7;
+  --color-claw-700: #0369a1;
+
+  --color-surface-0: #030712;
+  --color-surface-1: #0f172a;
+  --color-surface-2: #1e293b;
+  --color-surface-3: #334155;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-surface-0);
+  color: #e2e8f0;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background-color: var(--color-claw-500);
+  color: white;
+}
+
+.terminal-glow {
+  box-shadow:
+    0 0 20px rgba(56, 189, 248, 0.1),
+    0 0 60px rgba(56, 189, 248, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.float-anim {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+.pulse-ring {
+  animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+.code-block {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-surface-3);
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.code-block pre {
+  padding: 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.7;
+}

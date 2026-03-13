@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# install-qwen-asr.sh — Build antirez/qwen-asr binary and download Qwen3-ASR-0.6B model
+# install-qwen-asr.sh — Download pre-built qwen-asr binary and Qwen3-ASR model
+#
+# The qwen-asr binary is pre-compiled by asr-claw CI from antirez/qwen-asr
+# and distributed alongside asr-claw in GitHub Releases.
 #
 # Usage:
 #   bash install-qwen-asr.sh [--model-only] [--binary-only] [--model-size 0.6B|1.7B]
@@ -13,6 +16,7 @@
 set -euo pipefail
 
 # --- Configuration ---
+REPO="llm-net/asr-claw"
 BASE_DIR="${ASR_CLAW_HOME:-$HOME/.asr-claw}"
 BIN_DIR="$BASE_DIR/bin"
 MODEL_SIZE="${MODEL_SIZE:-0.6B}"
@@ -20,8 +24,6 @@ MODEL_NAME="Qwen3-ASR-${MODEL_SIZE}"
 MODEL_DIR="$BASE_DIR/models/$MODEL_NAME"
 HF_BASE="${HF_MIRROR:-https://huggingface.co}"
 HF_REPO="Qwen/$MODEL_NAME"
-REPO_URL="https://github.com/antirez/qwen-asr.git"
-BUILD_DIR="$(mktemp -d)"
 
 BINARY_ONLY=false
 MODEL_ONLY=false
@@ -43,70 +45,124 @@ warn()  { echo -e "\033[0;33m[warn]\033[0m  $*"; }
 error() { echo -e "\033[0;31m[error]\033[0m $*" >&2; }
 die()   { error "$@"; exit 1; }
 
-cleanup() {
-    rm -rf "$BUILD_DIR"
-}
-trap cleanup EXIT
-
 # --- Check prerequisites ---
 check_prereqs() {
-    local missing=()
-    command -v git  >/dev/null 2>&1 || missing+=(git)
-    command -v make >/dev/null 2>&1 || missing+=(make)
-    command -v cc   >/dev/null 2>&1 || missing+=(cc)
-
-    if [[ ${#missing[@]} -gt 0 ]]; then
-        die "Missing prerequisites: ${missing[*]}. Install with: brew install ${missing[*]}"
-    fi
-
-    # Check for curl or wget
     if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
-        die "Need curl or wget for model download"
+        die "Need curl or wget to download files"
     fi
 }
 
-# --- Build binary ---
-build_binary() {
-    if [[ "$MODEL_ONLY" == "true" ]]; then
-        info "Skipping binary build (--model-only)"
+# --- Detect platform ---
+detect_platform() {
+    local os arch
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+
+    case "$os" in
+        darwin) os="darwin" ;;
+        linux)  os="linux" ;;
+        *)      die "Unsupported OS: $os" ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)  arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *)             die "Unsupported architecture: $arch" ;;
+    esac
+
+    echo "${os}-${arch}"
+}
+
+# --- Get latest release tag ---
+get_latest_version() {
+    local url="https://api.github.com/repos/${REPO}/releases/latest"
+    local tag
+
+    if command -v curl &>/dev/null; then
+        tag="$(curl -fsSL "$url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')"
+    else
+        tag="$(wget -qO- "$url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')"
+    fi
+
+    if [ -z "$tag" ]; then
+        die "Failed to get latest release version from GitHub"
+    fi
+
+    echo "$tag"
+}
+
+# --- Verify checksum ---
+verify_checksum() {
+    local file="$1"
+    local filename="$2"
+    local version="$3"
+    local checksums_url="https://github.com/${REPO}/releases/download/${version}/checksums.txt"
+    local expected actual checksums
+
+    if command -v curl &>/dev/null; then
+        checksums="$(curl -fsSL "$checksums_url" 2>/dev/null)" || { warn "Checksum file not available, skipping verification."; return 0; }
+    else
+        checksums="$(wget -qO- "$checksums_url" 2>/dev/null)" || { warn "Checksum file not available, skipping verification."; return 0; }
+    fi
+
+    expected="$(echo "$checksums" | grep "$filename" | awk '{print $1}')"
+    if [ -z "$expected" ]; then return 0; fi
+
+    if command -v sha256sum &>/dev/null; then
+        actual="$(sha256sum "$file" | awk '{print $1}')"
+    elif command -v shasum &>/dev/null; then
+        actual="$(shasum -a 256 "$file" | awk '{print $1}')"
+    else
         return 0
     fi
 
-    # Check if binary already exists and is functional
+    if [ "$expected" != "$actual" ]; then
+        error "Checksum mismatch! Removing downloaded file."
+        rm -f "$file"
+        return 1
+    fi
+    ok "Checksum verified."
+}
+
+# --- Download pre-built binary ---
+download_binary() {
+    if [[ "$MODEL_ONLY" == "true" ]]; then
+        info "Skipping binary download (--model-only)"
+        return 0
+    fi
+
     if [[ -x "$BIN_DIR/qwen-asr" ]]; then
         ok "Binary already exists at $BIN_DIR/qwen-asr"
         return 0
     fi
 
-    info "Cloning antirez/qwen-asr..."
-    git clone --depth 1 "$REPO_URL" "$BUILD_DIR/qwen-asr" 2>&1 | tail -1
+    local platform version asset_name download_url
+    platform="$(detect_platform)"
+    asset_name="qwen-asr-${platform}"
 
-    info "Building with Accelerate framework (this may take a minute)..."
-    cd "$BUILD_DIR/qwen-asr"
-
-    # Use 'make blas' for macOS Accelerate, fallback to 'make'
-    if [[ "$(uname -s)" == "Darwin" ]]; then
-        make blas 2>&1 | tail -3
-    else
-        make 2>&1 | tail -3
+    # Check if this platform has a pre-built binary
+    if [[ "$platform" == "linux-arm64" ]]; then
+        die "Pre-built qwen-asr binary is not available for linux-arm64 yet. Please build from source: https://github.com/antirez/qwen-asr"
     fi
 
-    # Find the built binary
-    local binary=""
-    for name in qwen_asr qwen-asr; do
-        if [[ -x "$BUILD_DIR/qwen-asr/$name" ]]; then
-            binary="$BUILD_DIR/qwen-asr/$name"
-            break
-        fi
-    done
+    info "Fetching latest release version..."
+    version="$(get_latest_version)"
 
-    if [[ -z "$binary" ]]; then
-        die "Build succeeded but cannot find binary in $BUILD_DIR/qwen-asr/"
-    fi
+    download_url="https://github.com/${REPO}/releases/download/${version}/${asset_name}"
 
+    info "Downloading qwen-asr ${version} for ${platform}..."
     mkdir -p "$BIN_DIR"
-    cp "$binary" "$BIN_DIR/qwen-asr"
+
+    if command -v curl >/dev/null 2>&1; then
+        curl -fSL --progress-bar -o "$BIN_DIR/qwen-asr" "$download_url" || die "Download failed. Check your network or visit https://github.com/${REPO}/releases"
+    else
+        wget -q --show-progress -O "$BIN_DIR/qwen-asr" "$download_url" || die "Download failed. Check your network or visit https://github.com/${REPO}/releases"
+    fi
+
     chmod +x "$BIN_DIR/qwen-asr"
+
+    verify_checksum "$BIN_DIR/qwen-asr" "$asset_name" "$version" || die "Checksum verification failed"
+
     ok "Binary installed to $BIN_DIR/qwen-asr"
 }
 
@@ -215,7 +271,7 @@ main() {
     echo ""
 
     check_prereqs
-    build_binary
+    download_binary
     echo ""
     download_model
     echo ""

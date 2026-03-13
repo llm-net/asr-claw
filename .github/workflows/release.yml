@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # Pin antirez/qwen-asr commit for reproducible builds.
+  # Update this when a new version is needed.
+  QWEN_ASR_REF: main
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -64,8 +69,59 @@ jobs:
           name: asr-claw-${{ matrix.goos }}-${{ matrix.goarch }}
           path: src/bin/asr-claw-${{ matrix.goos }}-${{ matrix.goarch }}
 
+  build-qwen-asr:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - runner: macos-14
+            platform: darwin-arm64
+            make_target: blas
+          - runner: macos-13
+            platform: darwin-amd64
+            make_target: blas
+          - runner: ubuntu-latest
+            platform: linux-amd64
+            make_target: ''
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Install OpenBLAS (Linux)
+        if: startsWith(matrix.platform, 'linux')
+        run: sudo apt-get update && sudo apt-get install -y libopenblas-dev
+
+      - name: Clone antirez/qwen-asr
+        run: git clone --depth 1 --branch ${{ env.QWEN_ASR_REF }} https://github.com/antirez/qwen-asr.git
+
+      - name: Build
+        working-directory: qwen-asr
+        run: |
+          if [[ -n "${{ matrix.make_target }}" ]]; then
+            make ${{ matrix.make_target }}
+          else
+            make
+          fi
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          # antirez/qwen-asr produces qwen_asr or qwen-asr depending on version
+          for name in qwen_asr qwen-asr; do
+            if [[ -x "qwen-asr/$name" ]]; then
+              cp "qwen-asr/$name" "dist/qwen-asr-${{ matrix.platform }}"
+              chmod +x "dist/qwen-asr-${{ matrix.platform }}"
+              echo "Found binary: $name"
+              break
+            fi
+          done
+          ls -lh dist/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qwen-asr-${{ matrix.platform }}
+          path: dist/qwen-asr-${{ matrix.platform }}
+
   release:
-    needs: build
+    needs: [build, build-qwen-asr]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,16 +134,16 @@ jobs:
         run: |
           mkdir -p release
 
-          # Collect binaries
-          find artifacts -type f -name 'asr-claw-*' -exec cp {} release/ \;
-          chmod +x release/asr-claw-*
+          # Collect all binaries (asr-claw + qwen-asr)
+          find artifacts -type f \( -name 'asr-claw-*' -o -name 'qwen-asr-*' \) -exec cp {} release/ \;
+          chmod +x release/asr-claw-* release/qwen-asr-*
 
           # Copy install script
           cp scripts/install.sh release/install.sh
 
           # Generate SHA256 checksums
           cd release
-          sha256sum asr-claw-* > checksums.txt
+          sha256sum asr-claw-* qwen-asr-* > checksums.txt
           echo ""
           echo "=== Release Assets ==="
           ls -lh
@@ -119,4 +175,15 @@ jobs:
             chmod +x asr-claw
             ./asr-claw doctor
             ```
+
+            ## qwen-asr Engine (pre-built)
+
+            Pre-compiled [antirez/qwen-asr](https://github.com/antirez/qwen-asr) binaries are included.
+            Install via: `asr-claw engines install qwen-asr` (downloads binary + model automatically).
+
+            | Platform | Asset |
+            |----------|-------|
+            | macOS Apple Silicon | `qwen-asr-darwin-arm64` |
+            | macOS Intel | `qwen-asr-darwin-amd64` |
+            | Linux x86_64 | `qwen-asr-linux-amd64` |
           files: release/*
