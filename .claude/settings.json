@@ -1,0 +1,16 @@
+{
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true,
+    "plugin-dev@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "asr-claw@local-asr-claw": true
+  },
+  "extraKnownMarketplaces": {
+    "local-asr-claw": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  }
+}

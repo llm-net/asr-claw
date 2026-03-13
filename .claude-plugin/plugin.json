@@ -1,0 +1,12 @@
+{
+  "name": "asr-claw",
+  "version": "0.1.0",
+  "description": "Speech recognition CLI for AI agent automation. Transcribe audio streams from stdin, files, or URLs with multiple ASR engines — local and cloud.",
+  "author": {
+    "name": "llm-net",
+    "url": "https://github.com/llm-net"
+  },
+  "repository": "https://github.com/llm-net/asr-claw",
+  "license": "MIT",
+  "keywords": ["asr", "speech-recognition", "transcription", "audio", "whisper", "cli"]
+}

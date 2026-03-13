@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+#
+# setup.sh — Download pre-built asr-claw binary from GitHub Releases.
+# Called by the SessionStart hook to ensure the binary is available.
+# Falls back to building from source if Go is installed.
+#
+
+set -euo pipefail
+
+REPO="llm-net/asr-claw"
+
+# Resolve plugin root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+BIN_DIR="$PLUGIN_ROOT/bin"
+BINARY="$BIN_DIR/asr-claw"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[asr-claw]${NC} $*" >&2; }
+warn()  { echo -e "${YELLOW}[asr-claw]${NC} $*" >&2; }
+error() { echo -e "${RED}[asr-claw]${NC} $*" >&2; }
+
+# --- Detect OS and Arch ---
+detect_platform() {
+    local os arch
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    arch="$(uname -m)"
+
+    case "$os" in
+        darwin) os="darwin" ;;
+        linux)  os="linux" ;;
+        *)      error "Unsupported OS: $os"; exit 1 ;;
+    esac
+
+    case "$arch" in
+        x86_64|amd64)  arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *)             error "Unsupported architecture: $arch"; exit 1 ;;
+    esac
+
+    echo "${os}-${arch}"
+}
+
+# --- Get latest release tag ---
+get_latest_version() {
+    local url="https://api.github.com/repos/${REPO}/releases/latest"
+    local tag
+
+    if command -v curl &>/dev/null; then
+        tag="$(curl -fsSL "$url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')"
+    elif command -v wget &>/dev/null; then
+        tag="$(wget -qO- "$url" 2>/dev/null | grep '"tag_name"' | sed 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/')"
+    else
+        error "Neither curl nor wget found. Cannot download binary."
+        return 1
+    fi
+
+    if [ -z "$tag" ]; then
+        error "Failed to get latest release version."
+        return 1
+    fi
+
+    echo "$tag"
+}
+
+# --- Verify checksum ---
+verify_checksum() {
+    local binary="$1"
+    local version="$2"
+    local platform="$3"
+    local checksums_url="https://github.com/${REPO}/releases/download/${version}/checksums.txt"
+    local expected actual checksums
+
+    if command -v curl &>/dev/null; then
+        checksums="$(curl -fsSL "$checksums_url" 2>/dev/null)" || { warn "Checksum file not available, skipping."; return 0; }
+    else
+        checksums="$(wget -qO- "$checksums_url" 2>/dev/null)" || { warn "Checksum file not available, skipping."; return 0; }
+    fi
+
+    expected="$(echo "$checksums" | grep "asr-claw-${platform}" | awk '{print $1}')"
+    if [ -z "$expected" ]; then return 0; fi
+
+    if command -v sha256sum &>/dev/null; then
+        actual="$(sha256sum "$binary" | awk '{print $1}')"
+    elif command -v shasum &>/dev/null; then
+        actual="$(shasum -a 256 "$binary" | awk '{print $1}')"
+    else
+        return 0
+    fi
+
+    if [ "$expected" != "$actual" ]; then
+        error "Checksum mismatch! Removing downloaded binary."
+        rm -f "$binary"
+        return 1
+    fi
+    info "Checksum verified."
+}
+
+# --- Download binary ---
+download_binary() {
+    local platform="$1"
+    local version="$2"
+    local asset_name="asr-claw-${platform}"
+    local download_url="https://github.com/${REPO}/releases/download/${version}/${asset_name}"
+
+    info "Downloading asr-claw ${version} for ${platform}..."
+
+    mkdir -p "$BIN_DIR"
+
+    if command -v curl &>/dev/null; then
+        curl -fSL --progress-bar -o "$BINARY" "$download_url"
+    elif command -v wget &>/dev/null; then
+        wget -q --show-progress -O "$BINARY" "$download_url"
+    fi
+
+    chmod +x "$BINARY"
+
+    # Verify checksum
+    verify_checksum "$BINARY" "$version" "$platform" || return 1
+
+    info "Downloaded to $BINARY"
+}
+
+# --- Build from source (fallback) ---
+build_from_source() {
+    local src_dir="$PLUGIN_ROOT/src"
+
+    if ! command -v go &>/dev/null; then
+        error "Go is not installed. Cannot build from source."
+        error "Install Go 1.24+ from https://go.dev/dl/"
+        return 1
+    fi
+
+    info "Building from source..."
+    cd "$src_dir"
+
+    # Build directly into plugin bin/ directory
+    mkdir -p "$BIN_DIR"
+    local version
+    version="$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')"
+    go mod tidy
+    go build -ldflags "-X github.com/llm-net/asr-claw/cmd.Version=${version}" -o "$BINARY" .
+
+    info "Built from source: $BINARY"
+}
+
+# --- Main ---
+main() {
+    # Already installed?
+    if [ -f "$BINARY" ]; then
+        info "asr-claw is ready: $BINARY"
+        exit 0
+    fi
+
+    # Try downloading pre-built binary first
+    local platform
+    platform="$(detect_platform)"
+
+    local version
+    if version="$(get_latest_version)"; then
+        if download_binary "$platform" "$version"; then
+            info "asr-claw ${version} is ready."
+            exit 0
+        else
+            warn "Download failed, trying to build from source..."
+        fi
+    else
+        warn "Could not fetch latest release, trying to build from source..."
+    fi
+
+    # Fallback: build from source
+    if build_from_source; then
+        info "asr-claw is ready (built from source)."
+        exit 0
+    fi
+
+    error "Failed to install asr-claw. Please check your network or install Go to build from source."
+    exit 1
+}
+
+main

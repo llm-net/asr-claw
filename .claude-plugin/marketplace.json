@@ -1,0 +1,15 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "asr-claw-marketplace",
+  "description": "Speech recognition CLI for AI agent automation — transcribe audio streams with multiple ASR engines (local and cloud)",
+  "owner": {
+    "name": "llm-net",
+    "url": "https://github.com/llm-net"
+  },
+  "plugins": [
+    {
+      "name": "asr-claw",
+      "source": "."
+    }
+  ]
+}
