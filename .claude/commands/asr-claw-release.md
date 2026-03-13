@@ -187,11 +187,20 @@ clawhub inspect asr-claw
 
 向用户汇报两个平台的发布状态。
 
-## 注意事项
+## 踩坑记录
 
-- Git remote：`origin → llm-net/asr-claw`（主仓库，CI 和 Release 在此）
-- 每步执行前确认上一步成功，不要跳步
-- 如果 `clawhub publish` 报 "Version already exists"，说明该版本已发布过，需要 bump 版本号
-- 如果 ClawHub 安全扫描标记为 Suspicious，检查 Step 3 的规则并修复后 bump 版本重发
-- **ClawHub workspace 陷阱**：`clawhub publish` 从 `~/.openclaw/workspace/skills/asr-claw/` 读取文件，不是项目目录。每次发布前必须执行 Step 7.1 同步，否则上传的是旧内容。可用 `clawhub inspect asr-claw --files` 对比 hash 验证
-- **_meta.json 版本陷阱**：`clawhub publish` 不更新 workspace 中 `_meta.json` 的 version 字段。安全扫描对比 `_meta.json.version` vs `SKILL.md version`，不匹配 → Suspicious。每次发布前必须在 Step 7.2 手动同步该字段
+> 每条都是真实翻车后总结的，不要跳过。
+
+| 版本 | 坑 | 现象 | 修法 |
+|------|----|------|------|
+| v1.0.0 | `install: bash "script"` | ClawHub 标记 Suspicious — "published package contains no scripts", 下载源不透明 | 改 `kind: download` + `checksum_url`，加 `homepage`、`requires.bins` |
+| v1.0.0 | metadata 缺 `homepage` | 安全扫描 "Install Mechanism" 告警，来源不可验证 | frontmatter 加 `homepage: https://github.com/llm-net/asr-claw` |
+| adb-claw v1.5.3 | `_meta.json` 版本不同步 | 安全扫描 "metadata/version mismatch" → Suspicious | 发布前 Step 7.2 手动更新 `_meta.json` version |
+| adb-claw v1.5.x | workspace 文件未同步 | `clawhub publish` 上传的是旧 SKILL.md | 发布前 Step 7.1 用 `cp` + `shasum` 验证 |
+
+**其他注意：**
+
+- Git remote：`origin → llm-net/asr-claw`
+- `clawhub publish` 同版本号不可重复发布，修了 bug 必须 bump 版本
+- Suspicious 后修复不能覆盖发布，只能 bump 新版本重发
+- SKILL.md 中 `export API_KEY=...` 示例不违规（用户自行配置），不用删
