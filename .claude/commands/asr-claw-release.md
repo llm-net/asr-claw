@@ -129,27 +129,38 @@ checksums.txt
 
 **GitHub Release 只覆盖二进制分发，ClawHub 必须单独发布。**
 
-### 7.1 同步 workspace（必须）
+### 7.1 同步 SKILL.md（必须）
 
 `clawhub publish` 从 `~/.openclaw/workspace/skills/asr-claw/` 读取文件，**不是**命令行指定的项目路径。如果 workspace 中有旧的 SKILL.md，发布的永远是旧内容，bump 再多版本都没用。
 
 ```bash
-# 用项目中的最新 SKILL.md 覆盖 workspace 中的旧文件
 cp skills/asr-claw/SKILL.md ~/.openclaw/workspace/skills/asr-claw/SKILL.md
-
-# 验证两个文件一致
 shasum -a 256 skills/asr-claw/SKILL.md ~/.openclaw/workspace/skills/asr-claw/SKILL.md
 ```
 
 两个 hash 必须完全一致，不一致则说明复制失败，不要继续。
 
-### 7.2 发布
+### 7.2 同步 _meta.json 版本号（必须）
+
+**踩坑记录（adb-claw v1.5.3）：** `clawhub publish` 不会自动更新 workspace 中 `_meta.json` 的 `version` 字段。安全扫描会对比 `_meta.json.version` 和 `SKILL.md` frontmatter 中的 `version`，如果不一致会触发 "metadata/version mismatch" 告警，导致整体评级为 Suspicious。
+
+```bash
+# 检查当前 _meta.json 版本
+cat ~/.openclaw/workspace/skills/asr-claw/_meta.json
+
+# 如果 version 字段不是当前发布版本，手动更新
+# 用 Edit 工具将 "version": "旧版本" 改为 "version": "$ARGUMENTS"
+```
+
+**必须确认** `_meta.json` 中的 `version` 与 SKILL.md frontmatter 中的 `version` 一致，否则安全扫描必定报 Suspicious。
+
+### 7.3 发布
 
 ```bash
 clawhub publish skills/asr-claw --version $ARGUMENTS --changelog "变更摘要"
 ```
 
-### 7.3 验证服务端文件
+### 7.4 验证服务端文件
 
 ```bash
 # 对比服务端文件 hash，确认上传的是最新内容
@@ -182,3 +193,5 @@ clawhub inspect asr-claw
 - 每步执行前确认上一步成功，不要跳步
 - 如果 `clawhub publish` 报 "Version already exists"，说明该版本已发布过，需要 bump 版本号
 - 如果 ClawHub 安全扫描标记为 Suspicious，检查 Step 3 的规则并修复后 bump 版本重发
+- **ClawHub workspace 陷阱**：`clawhub publish` 从 `~/.openclaw/workspace/skills/asr-claw/` 读取文件，不是项目目录。每次发布前必须执行 Step 7.1 同步，否则上传的是旧内容。可用 `clawhub inspect asr-claw --files` 对比 hash 验证
+- **_meta.json 版本陷阱**：`clawhub publish` 不更新 workspace 中 `_meta.json` 的 version 字段。安全扫描对比 `_meta.json.version` vs `SKILL.md version`，不匹配 → Suspicious。每次发布前必须在 Step 7.2 手动同步该字段

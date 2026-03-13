@@ -1,14 +1,20 @@
 ---
 name: asr-claw
-version: 1.0.0
+version: 1.1.0
 description: Speech recognition CLI for AI agent automation. Transcribe audio from stdin, files, or URLs.
 metadata:
   openclaw:
+    homepage: https://github.com/llm-net/asr-claw
     os: [darwin, linux]
     arch: [arm64, amd64]
-    dependencies: []
-    install: |
-      bash "${SKILL_ROOT}/scripts/install-qwen-asr.sh"
+    requires:
+      bins: [asr-claw]
+    install:
+      kind: download
+      url: https://github.com/llm-net/asr-claw/releases/latest/download/asr-claw-${os}-${arch}
+      dest: bin/asr-claw
+      executable: true
+      checksum_url: https://github.com/llm-net/asr-claw/releases/latest/download/checksums.txt
     settings:
       - key: default_engine
         type: string

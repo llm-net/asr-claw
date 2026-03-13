@@ -101,7 +101,7 @@ export default function Install({ t }) {
             </div>
             <div className="font-mono text-xs leading-6 text-slate-500">
               <div><span className="text-slate-400">name:</span> asr-claw</div>
-              <div><span className="text-slate-400">version:</span> 1.0.0</div>
+              <div><span className="text-slate-400">version:</span> 1.1.0</div>
               <div><span className="text-slate-400">binary:</span> asr-claw</div>
               <div><span className="text-slate-400">protocol:</span> stdin/stdout | json envelope</div>
               <div><span className="text-slate-400">platforms:</span> darwin/arm64, darwin/amd64, linux/arm64, linux/amd64</div>
