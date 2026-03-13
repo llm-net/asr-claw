@@ -7,7 +7,7 @@ const translations = {
       install: 'Install',
     },
     hero: {
-      badge: 'v1.1.0 — Built for AI Agents',
+      badge: 'v1.1.1 — Built for AI Agents',
       title_1: 'Give Your Agent',
       title_2: 'Ears',
       subtitle: 'A speech recognition CLI that speaks your language — stdin/stdout, JSON envelopes, Unix pipes. No SDK, no wrapper, no overhead. Just pipe audio in and get structured text out.',
@@ -103,7 +103,7 @@ const translations = {
       install: '安装',
     },
     hero: {
-      badge: 'v1.1.0 — 为 AI Agent 而生',
+      badge: 'v1.1.1 — 为 AI Agent 而生',
       title_1: '让你的 Agent',
       title_2: '听见世界',
       subtitle: '一个说 Agent 语言的语音识别 CLI — stdin/stdout、JSON 信封、Unix 管道。无 SDK、无封装、无开销。音频进，结构化文本出。',

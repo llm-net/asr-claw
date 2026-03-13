@@ -1,6 +1,6 @@
 ---
 name: asr-claw
-version: 1.1.0
+version: 1.1.1
 description: Speech recognition CLI for AI agent automation. Transcribe audio from stdin, files, or URLs.
 metadata:
   openclaw:
